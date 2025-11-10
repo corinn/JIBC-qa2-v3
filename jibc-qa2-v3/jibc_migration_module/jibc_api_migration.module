@@ -1,0 +1,71 @@
+<?php
+
+use Drupal\field_collection\Entity\FieldCollectionItem;
+use Drupal\node\Entity\Node;
+use Drupal\migrate_tools\MigrateExecutable;
+use Drupal\migrate\MigrateMessage;
+use Drupal\migrate\Plugin\MigrationInterface;
+use Drupal\Core\Site\Settings;
+
+/**
+ * Implements hook_migration_plugins_alter().
+ *
+ * Dynamically set the API URLs based on environment configuration.
+ */
+function jibc_api_migration_migration_plugins_alter(array &$migrations) {
+  // Get API configuration from settings.php
+  $settings_config = Settings::get('jibc_api', []);
+  $base_url = $settings_config['api_base_url'] ?? 'https://apim.workato.com/jibc/coursefetch-v1-1';
+
+  // Update the new_courses migration with the correct URL
+  if (isset($migrations['new_courses'])) {
+    $migrations['new_courses']['source']['urls'] = $base_url . '/courses';
+
+    // Log the URL being used for debugging
+    \Drupal::logger('jibc_api_migration')->info('Migration URL set to: @url', [
+      '@url' => $base_url . '/courses'
+    ]);
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function jibc_api_migration_cron() {
+  // Add a lock to prevent overlapping cron runs
+  $lock = \Drupal::lock();
+
+  // Try to acquire lock for 5 minutes (300 seconds)
+  if (!$lock->acquire('jibc_api_migration_cron', 300)) {
+    // Another cron is already running, skip this execution
+    \Drupal::logger('jibc_api_migration')->warning('Skipping course migration - another instance is already running');
+    return;
+  }
+
+  try {
+    // Create a migration plugin for the new_courses migration
+    $migration = \Drupal::service('plugin.manager.migration')->createInstance('new_courses');
+
+    // Reset migration status if it's not idle
+    if ($migration->getStatus() !== MigrationInterface::STATUS_IDLE) {
+      $migration->setStatus(MigrationInterface::STATUS_IDLE);
+    }
+
+    // Run the migration
+    $executable = new MigrateExecutable($migration, new MigrateMessage());
+    $result = $executable->import();
+
+    \Drupal::logger('jibc_api_migration')->notice('Course migration run via cron. Result: @result', [
+      '@result' => $result,
+    ]);
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('jibc_api_migration')->error('Error running course migration: @message', [
+      '@message' => $e->getMessage(),
+    ]);
+  }
+  finally {
+    // Release lock
+    $lock->release('jibc_api_migration_cron');
+  }
+}
