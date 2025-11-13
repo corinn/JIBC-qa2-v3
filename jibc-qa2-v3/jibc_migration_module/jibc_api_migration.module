@@ -51,12 +51,34 @@ function jibc_api_migration_cron() {
       $migration->setStatus(MigrationInterface::STATUS_IDLE);
     }
 
-    // Run the migration
-    $executable = new MigrateExecutable($migration, new MigrateMessage());
-    $result = $executable->import();
+    // First, rollback missing courses (unpublish courses no longer in API)
+    $options = [
+      'limit' => 100,  // Process 100 at a time for rollback
+      'feedback' => 50,
+    ];
 
-    \Drupal::logger('jibc_api_migration')->notice('Course migration run via cron. Result: @result', [
-      '@result' => $result,
+    $rollback_executable = new \Drupal\jibc_api_migration\JIBCMigrateExecutable(
+      $migration,
+      new MigrateMessage(),
+      $options
+    );
+    $rollback_result = $rollback_executable->rollbackMissingItems();
+
+    \Drupal::logger('jibc_api_migration')->notice('Course rollback completed via cron. Result: @result', [
+      '@result' => $rollback_result,
+    ]);
+
+    // Reset migration status after rollback
+    if ($migration->getStatus() !== MigrationInterface::STATUS_IDLE) {
+      $migration->setStatus(MigrationInterface::STATUS_IDLE);
+    }
+
+    // Then run the import to update/create courses
+    $import_executable = new \Drupal\jibc_api_migration\JIBCMigrateExecutable($migration, new MigrateMessage());
+    $import_result = $import_executable->import();
+
+    \Drupal::logger('jibc_api_migration')->notice('Course import completed via cron. Result: @result', [
+      '@result' => $import_result,
     ]);
   }
   catch (\Exception $e) {
