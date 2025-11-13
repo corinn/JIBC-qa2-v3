@@ -430,7 +430,7 @@ class JIBCMigrateExecutable extends MigrateExecutableBase {
       }
 
       $event = $this->getEventDispatcher()
-        ->dispatch(MigratePlusEvents::MISSING_SOURCE_ITEM, new MigrateRowDeleteEvent($this->migration, $destination_key));
+        ->dispatch(new MigrateRowDeleteEvent($this->migration, $destination_key), MigratePlusEvents::MISSING_SOURCE_ITEM);
       if (!$event->isPropagationStopped()) {
         $this->rollbackCurrentRow();
       }
@@ -449,7 +449,7 @@ class JIBCMigrateExecutable extends MigrateExecutableBase {
     }
 
     // Notify modules that rollback attempt was complete.
-    $this->getEventDispatcher()->dispatch(MigrateEvents::POST_ROLLBACK, new MigrateRollbackEvent($this->migration));
+    $this->getEventDispatcher()->dispatch(new MigrateRollbackEvent($this->migration), MigrateEvents::POST_ROLLBACK);
     $this->migration->setStatus(MigrationInterface::STATUS_IDLE);
 
     return $return;
@@ -468,13 +468,13 @@ class JIBCMigrateExecutable extends MigrateExecutableBase {
 
       //if ($map_row['rollback_action'] == MigrateIdMapInterface::ROLLBACK_DELETE) {
         $this->getEventDispatcher()
-          ->dispatch(MigrateEvents::PRE_ROW_DELETE, new MigrateRowDeleteEvent($this->migration, $destination_key));
+          ->dispatch(new MigrateRowDeleteEvent($this->migration, $destination_key), MigrateEvents::PRE_ROW_DELETE);
 
         // Unpublished the node.
         $this->unpublishCourse($destination_key);
 
         $this->getEventDispatcher()
-          ->dispatch(MigrateEvents::POST_ROW_DELETE, new MigrateRowDeleteEvent($this->migration, $destination_key));
+          ->dispatch(new MigrateRowDeleteEvent($this->migration, $destination_key), MigrateEvents::POST_ROW_DELETE);
       //}
     }
   }
