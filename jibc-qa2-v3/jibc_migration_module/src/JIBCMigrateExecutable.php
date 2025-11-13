@@ -407,7 +407,17 @@ class JIBCMigrateExecutable extends MigrateExecutableBase {
     /** @var \Drupal\migrate\Plugin\MigrateSourceInterface $source */
     $this->source = \Drupal::service('plugin.manager.migrate.source')
       ->createInstance($source_config['plugin'], $source_config, $this->migration);
-    $source_ids = $this->source->sourceIds();
+
+    // Collect all actual source IDs from the API response
+    $source_ids = [];
+    foreach ($this->source as $row) {
+      $source_ids[] = $row->getSourceIdValues();
+    }
+
+    \Drupal::logger('jibc_api_migration')->info('Found @count courses in API source', [
+      '@count' => count($source_ids),
+    ]);
+
     // Rollback any rows that are not returned from the source plugin.
     foreach ($id_map as $map_row) {
       $source_key = $id_map->currentSource();
